@@ -1,0 +1,455 @@
+var express = require('express');
+var path = require('path');
+var mongoose = require('mongoose');
+var config = require('./config/database');
+var bodyParser = require('body-parser');
+var session = require('express-session');
+var expressValidator = require('express-validator');
+var expressMessages = require('express-messages');
+var fileUpload = require('express-fileupload');
+var passport = require('passport');
+var user = require('./models/user');
+var user1 = require('./models/user');
+var user2 = require('./models/user');
+var order = require('./models/order');
+var sessions1 = require('./models/session');
+var moment =  require('moment');
+var area = require('./models/area');
+var schedule = require('node-schedule');
+var crypto = require('crypto');
+
+// reset lại mã code cho mỗi nhân viên
+function randomValueHex(len) {
+  return crypto
+    .randomBytes(Math.ceil(len / 2))
+    .toString('hex') // convert to hexadecimal format
+    .slice(0, len) // return required number of characters
+}
+
+
+function setcode(){
+    const setco = new Set();
+    user1.find({},function(err,users){
+        var length = users.length;
+        while(setco.size<length){
+            var value1 = randomValueHex(4);
+            setco.add(value1);
+        }
+        var i = 0;
+        for (let item of setco) {           
+            users[i].code = item;
+            users[i].save();
+            i++;
+        } 
+    });
+}
+// reset sau thời gian mặc định
+// Execute job at 00:00 am every day
+//('0 0 * * *', function()
+var resetOrderJob = schedule.scheduleJob(' * 0 * * *', function(){
+
+    setcode();
+    
+    user.updateMany({today_finished_count: {$ne: 0}},{$set: { today_finished_count: 0}},function(req,user){
+        
+    });
+    
+    order.deleteMany({}, function(errr, dataaaa){
+    
+    });
+
+    area.updateMany({today_order_count: {$ne: 0}},{$set: { today_order_count: 0}},function(req,area){
+        
+    });
+});
+mongoose.set('useFindAndModify', false);
+//connet to db
+mongoose.connect(config.database);
+var db = mongoose.connection;
+db.on('error', console.error.bind(console, 'connection error:'));
+db.once('open', function() {
+  console.log('conneted to mongodb');
+});
+
+//init app
+var app = express();
+
+//view engine setup
+app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'ejs');
+
+//set public folder
+app.use(express.static(path.join(__dirname, '/public')));
+
+// Body Parser middleware
+// 
+// parse application/x-www-form-urlencoded
+app.use(bodyParser.urlencoded({extended: false}));
+// parse application/json
+app.use(bodyParser.json());
+// Set global errors variable
+app.locals.errors = null;
+
+//socket.io
+
+var server = require("http").Server(app);
+var io = require("socket.io")(server);
+server.listen(3000);
+var clientList = [];
+io.on("connection",function(socket){
+    console.log(socket.id + " ket noi"); 
+    let username = socket.handshake.query.username;
+    user2.updateOne({username: username},{status:2},function(err,data){
+        if(err) console.log(err);
+       
+    });
+    clientList.push({id: socket.id,username:username, socket: socket});
+
+    socket.on("disconnect",function(){  
+        for(var i = 0; i < clientList.length; i++){
+            
+            if (clientList[i].id == socket.id) {
+                user2.updateOne({username: clientList[i].username},{status:3},function(err,data){
+                    if(err) console.log(err);
+                   
+                });
+                clientList.splice(i, 1);
+                break;
+            }
+        }
+    });
+});
+
+//change stream bắt sự thay đổi của stt
+const changeStream = order.watch();
+    changeStream.on('change', function(change){
+        switch(change.operationType) {
+            case "insert":
+                order_id = change.fullDocument.stt;
+                user.findOne({ service_id: change.fullDocument.service_id, area_id: change.fullDocument.area_id ,status: 0 }).sort({today_finished_count: 1}).exec( function(err, data){
+                   
+                    if(data){
+                    data.status = 1;
+                    
+                    data.save(function(err){
+                        if (err) {  
+                            console.log(err);
+                        } 
+                    })
+                    order.update({stt: order_id}, {status: 1},function(err,req){
+                        if (err) {  
+                            console.log(err);
+                        } 
+                    });
+                    var session = new sessions1({
+                        order_id: order_id,
+                        area_id: data.area_id,
+                        order_time: change.fullDocument.order_time,
+                        service_id: data.service_id,
+                        username: data.username,
+                        time_start: moment().format(),
+                        time_end: moment().format()
+                      });
+                    session.save(function (err,ses) {
+                        if (err) {  
+                            console.log(err);
+                        }
+                    });
+                  
+                    var username =  data.username;
+                    var name = data.name;
+                    var count = data.today_finished_count;
+                   
+                        clientList.forEach((client) => {
+                            client.socket.emit(username,{
+                                name:name,
+                                username:username,
+                                session_id: session._id,
+                                order_id: order_id,
+                                count: count
+                            });	
+                        }) ;
+                        clientList.forEach((client) => {
+                            client.socket.emit('feedback1'+username,{
+                                order_id: order_id,
+                            });	
+                        }) ;
+                        // clientList.forEach((client) => {
+                        //     client.socket.emit('dashboard',{
+                        //     status: data.status,
+                        //     port: data.port,
+                        //     order_id: order_id, 
+                        //     });        
+                        // });	                            
+                }           
+                });
+                // tìm nhân viên đang choờ
+                order.find({ service_id: change.fullDocument.service_id, area_id: change.fullDocument.area_id ,status: 0 }).sort({stt: 1}).exec( function(err, datas){  
+                var sttwaiter = '';
+                var luottiep = datas.length;
+                for (const data of datas) {
+                    // luottiep = luottiep + " stt: " + data.stt + "";
+                    sttwaiter = sttwaiter + " stt: " + data.stt;
+                }
+                
+                // clientList.forEach((client) => {
+                //     client.socket.emit('sttwaiter',{
+                //         sttwaiter:sttwaiter
+                //     });
+                // });
+                clientList.forEach((client) => {
+                    client.socket.emit('luottiep',{
+                        luottiep:luottiep
+                    });
+                });
+            });              
+                break;
+            case "replace":
+                break;
+            case "delete":
+                         
+                break;
+            default: 
+                console.log('Error: order Change stream type is ' + change.operationType);
+                break;
+        }
+    });
+    
+// sự thay đổi của session nếu bắt đầu ( tạo 1 session mới ) cho hiện feedbacks.
+const changeStream1 = sessions1.watch({fullDocument : 'updateLookup'});
+changeStream1.on('change',function(result_ses){
+
+    switch(result_ses.operationType){
+        
+        case "insert":
+            clientList.forEach((client) => {
+                client.socket.emit('feedbacks'+result_ses.fullDocument.username,{
+                    id: result_ses.fullDocument._id,
+                    order_id: result_ses.fullDocument.order_id
+                });
+            });
+                    
+            break;
+        case "update":  
+
+        clientList.forEach((client) => {
+            client.socket.emit('feedbacks1'+result_ses.fullDocument.username,{
+                id: result_ses.fullDocument._id,
+                order_id: result_ses.fullDocument.order_id
+            });
+        });
+            
+            break;
+        default: 
+            console.log('Error: sessions1 Change stream type is ' + result_ses.operationType);
+            break;   
+    }
+});
+    
+// khi nhân viên đăng nhập vào, tìm stt nào đang rảnh gán vào nhân viên đó
+async function process(result_us){
+    var myPromise = () => {
+        return new Promise((resolve, reject) => {
+       
+            order.findOne({service_id: result_us.fullDocument.service_id,area_id: result_us.fullDocument.area_id,status:0}, async function(err, availableOrder){
+                if (err)
+                    reject(err);
+                else if (availableOrder) {
+                            
+                    availableOrder.status = 1;
+                    await availableOrder.save().then(saved => {});
+                    resolve(availableOrder);
+                }  
+            });
+        });
+    }
+    var updatedOrder = await myPromise();
+
+    var username = result_us.fullDocument.username;
+    var myPromise = () => {
+        return new Promise((resolve, reject) => {
+                 
+            user.updateOne({username: username}, {status: 1}, function(err,req){
+                if (err) {  
+                    reject(err);
+                } 
+                else{
+                    resolve('ok');
+                }
+            });
+        });
+    }
+    var updateUserResult = await myPromise();
+
+
+    var myPromise = () => {
+        return new Promise(async function (resolve, reject) {
+
+            var session = new sessions1({
+                order_id: updatedOrder.stt,
+                area_id: updatedOrder.area_id,
+                order_time: updatedOrder.order_time,
+                service_id: updatedOrder.service_id,
+                username: username,
+                time_start: moment().format(),
+                time_end: moment().format()
+            });
+            await session.save().then(saved => {});
+            resolve(session);
+        });
+    }
+    var createdSession = await myPromise();
+    
+    var name = result_us.fullDocument.name;
+
+    clientList.forEach((client) => {
+        client.socket.emit(username,{
+            name: name,
+            username: username,
+            session_id: createdSession._id,
+            order_id: updatedOrder.stt,        
+        });	
+    });
+}
+
+
+const changeStream2 = user1.watch({fullDocument : 'updateLookup'});
+changeStream2.on('change',function(result_us){
+
+    switch(result_us.operationType){       
+        case "insert":
+            break;
+        case "update":
+            if (result_us.fullDocument.status == 0){
+               
+                process(result_us);               
+            }
+
+            order.find({ service_id: result_us.fullDocument.service_id, area_id: result_us.fullDocument.area_id ,status: 0 }).sort({stt: 1}).exec( function(err, datas){  
+                var luottiep = datas.length;
+                // for (const data of datas) {
+                //     luottiep = luottiep + "stt: " + data.stt + "";
+                   
+                // }
+                
+                clientList.forEach((client) => {
+                    client.socket.emit('luottiep',{
+                        luottiep:luottiep
+                    });
+                });
+            });  
+            var count = result_us.fullDocument.today_finished_count;
+            var username1 =  result_us.fullDocument.username+'count';
+            clientList.forEach((client) => {
+                client.socket.emit(username1,{
+                    count:count
+                });   
+            });             
+            clientList.forEach((client) => {
+                client.socket.emit('dashboard',{
+                    status: result_us.fullDocument.status,
+                    port: result_us.fullDocument.port,
+                });
+            });
+            order.find({ service_id: result_us.fullDocument.service_id, area_id: result_us.fullDocument.area_id ,status: 0 }).sort({stt: 1}).exec( function(err, datas){  
+                var sttwaiter = '';
+                for (const data of datas) {
+                    sttwaiter = sttwaiter + "stt: " + data.stt;
+                }     
+                clientList.forEach((client) => {
+                    client.socket.emit('sttwaiter',{
+                        sttwaiter:sttwaiter
+                    });
+                });
+            });   
+            break;
+        default: 
+            console.log('Error: sessions1 Change stream type is ' );
+            break;
+        
+    }
+});
+
+app.use(fileUpload());
+
+
+
+
+// Express Session middleware
+app.use(session({
+    secret: 'keyboard cat',
+    resave: true,
+    saveUninitialized: true
+//  cookie: { secure: true }
+}));
+
+// Express Validator middleware
+app.use(expressValidator({
+    errorFormatter: function (param, msg, value) {
+        var namespace = param.split('.')
+                , root = namespace.shift()
+                , formParam = root;
+
+        while (namespace.length) {
+            formParam += '[' + namespace.shift() + ']';
+        }
+        return {
+            param: formParam,
+            msg: msg,
+            value: value
+        };
+    },
+    customValidators: {
+        isImage: function (value, filename) {
+            var extension = (path.extname(filename)).toLowerCase();
+            switch (extension) {
+                case '.jpg':
+                    return '.jpg';
+                case '.jpeg':
+                    return '.jpeg';
+                case '.png':
+                    return '.png';
+                case '':
+                    return '.jpg';
+                default:
+                    return false;
+            }
+        }
+    }
+}));
+
+// Express Messages middleware
+app.use(require('connect-flash')());
+app.use(function (req, res, next) {
+    res.locals.messages = expressMessages(req, res);
+    next();
+});
+
+//passport config
+require('./config/passport')(passport);
+
+//passport middleware
+app.use(passport.initialize());
+app.use(passport.session());
+app.get('*', function(req,res,next) {
+    res.locals.employee = req.session.employee;
+    res.locals.user = req.user || null;
+    next();
+ });
+
+
+//set routes
+
+var sessions = require('./routes/sessions.js');
+var adminPages = require('./routes/admin_pages.js');
+var dashboard = require('./routes/dashboard.js');
+var feedbacks = require('./routes/feedbacks.js');
+var systems = require('./routes/systems.js');
+app.use('/systems', systems);
+app.use('/dashboard',dashboard);
+app.use('/',adminPages);
+app.use('/feedbacks',feedbacks);
+app.use('/sessions',sessions);
+
+//start the server
+
