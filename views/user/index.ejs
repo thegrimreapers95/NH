@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+
+<html lang="vn">
+    <!--<![endif]-->
+    <!-- BEGIN HEAD -->
+
+    <head>
+        <meta charset="utf-8" />
+        <title>Nhân viên</title>
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta content="width=device-width, initial-scale=1" name="viewport" />
+        <meta content="Preview page of Metronic Admin Theme #4 for metronic and bootstrap typography for texts, headings, lists, panels and more" name="description" />
+        <meta content="" name="author" />
+        <!-- BEGIN GLOBAL MANDATORY STYLES -->
+        <link href="https://fonts.googleapis.com/css?family=Roboto&display=swap" rel="stylesheet">
+        <link href="assets/global/plugins/font-awesome/css/font-awesome.min.css" rel="stylesheet" type="text/css" />
+        <link href="assets/global/plugins/bootstrap/css/bootstrap.min.css" rel="stylesheet" type="text/css" />
+        <link href="assets/global/plugins/bootstrap-switch/css/bootstrap-switch.min.css" rel="stylesheet" type="text/css" />
+        <link href="assets/global/css/components.min.css" rel="stylesheet" id="style_components" type="text/css" />
+        <link href="assets/global/css/plugins.min.css" rel="stylesheet" type="text/css" />
+        <link href="assets/global/plugins/bootstrap-markdown/css/bootstrap-markdown.min.css" rel="stylesheet" type="text/css" />
+       
+        <link href="assets/global/css/components.min.css" rel="stylesheet" id="style_components" type="text/css" />
+        <link href="assets/global/css/plugins.min.css" rel="stylesheet" type="text/css" />
+        <!-- END THEME GLOBAL STYLES -->
+        <!-- BEGIN THEME LAYOUT STYLES -->
+        <link href="assets/layouts/layout4/css/layout.min.css" rel="stylesheet" type="text/css" />
+        <link href="assets/layouts/layout4/css/themes/default.min.css" rel="stylesheet" type="text/css" id="style_color" />
+        <link href="assets/layouts/layout4/css/custom.min.css" rel="stylesheet" type="text/css" />
+        <!-- END THEME LAYOUT STYLES -->
+        
+        <% if (user) { %>
+            <p id="username" hidden><%= user.username %></p>
+        <% } %>
+
+
+<!-- thẻ p start -->
+	<p id="order_id" hidden></p>
+    <p id="service_id" hidden></p>
+    <p id="session_id" hidden></p>
+
+
+<!-- thẻ p trả về -->
+	<p id="order" hidden></p>
+	<p id="user" hidden></p>
+	<p id="id" hidden></p>
+
+    <script src="socket.io.js"></script>
+    <script src="jquery.min.js"></script>
+    <script>
+            // bắt sự kiện lick next
+
+      $(document).ready(function(){
+        $("#start").click(function(){
+          $("#start").attr("disabled", true);
+          $("#next").attr("disabled", true);
+          $("#logout").hide();
+          $("#noidungviec").show();
+
+          var order_id = $("#order_id").text();
+          var service_id = $("#service_id").text();
+          var username = $("#username").text();
+        
+            $.post('sessions/start',{username: username}, function(data){
+                             
+          });
+     
+         
+        });
+            });
+            
+            // bắt sự kiện lick end
+
+     
+    $(document).ready(function(){
+        $("#close").click(function(){
+          $("#start").attr("disabled", true);
+          $("#end").attr("disabled", false);
+         
+                });
+            }); 
+
+      $(document).ready(function(){
+        $("#ketthuc").click(function(){
+        $("#start").attr("disabled", false);
+        $("#logout").show();
+        $("#noidungviec").hide();
+        var order_id = $("#order_id").text();
+      
+        var username = $("#username").text();
+        var session_id = $("#session_id").text();
+        var so_luong_lenh = $("#so_luong_lenh").val();
+        var comment_user = $("#comment_user").val();
+    
+        if(session_id){
+            var reason = document.getElementsByName('reason');
+            var result = "";   
+            
+            for (var i = 0; i < reason.length; i++){
+                if (reason[i].checked === true){
+                    result += reason[i].value;
+                }
+            }  
+        }   
+        $.post('sessions/end',{_id: session_id,order_id:order_id,so_luong_lenh: so_luong_lenh,comment_user:comment_user,reason: result, username:username}, function(data){
+           
+        });  
+        $("#start").attr("disabled", false);
+          $("#end").attr("disabled", true);
+        $("#noidung").text('');
+        $("#khachhang").text('số thứ tự: ');
+        $("#so_luong_lenh").val(''); 
+        $("#comment_user").val('');      
+        }); 
+        
+    }) 
+            
+            // bắt sự kiện lick logout
+            $(document).ready(function(){
+        $("#logout").click(function(){
+                    var order_id = $("#order_id").text();
+                    if(order_id) {
+                        $.post('sessions/logoutbwh',{order_id: order_id}, function(data){
+              
+                        });
+                    }
+        });
+            }) 
+</script>
+<script>
+     
+</script>
+<script>
+
+// sự kiện click logout
+
+    var sk = $("#username").text();
+    var socket = io({
+        query: {
+            username: sk
+        }
+    });
+
+  
+    socket.on(sk,function(data)
+    { 
+        $("#noidung").append('mời số thứ tự: ' + data.order_id + " đến làm việc với :  "+ data.name);
+        $("#order_id").text(data.order_id);
+        $("#session_id").text(data.session_id);
+        $("#end").attr("disabled", false);
+        $("#khachhang").text('Số thứ tự làm việc: ' + data.order_id);
+   
+    });
+    socket.on(sk+'count',function(data)
+    {
+        $("#count").text('');
+      $("#count").text('Tổng số lượt làm việc: '+ data.count);
+    });
+    socket.on('luottiep',function(data)
+    {
+        $("#luottiep").text('');
+        $("#luottiep").text('Tổng số khách hàng đợi: '+ data.luottiep);
+    });
+    socket.emit('user',{
+            value: sk
+        });  
+</script>  
+<script type="text/javascript">
+    var areYouReallySure = false;
+    function areYouSure() {
+            if(allowPrompt){
+                    if (!areYouReallySure && true) {
+                            areYouReallySure = true;
+                            var confMessage = "***************************************\n\n W A I T !!! \n\nBefore leaving our site, follow CodexWorld for getting regular updates on Programming and Web Development.\n\n\nCLICK THE *CANCEL* BUTTON RIGHT NOW\n\n***************************************";
+                            return confMessage;
+                    }
+            }else{
+                    allowPrompt = true;
+            }
+    }
+    
+    var allowPrompt = true;
+    window.onbeforeunload = areYouSure;
+</script>     
+        <body class="page-container-bg-solid page-header-fixed page-sidebar-closed-hide-logo">
+        <!-- BEGIN HEADER -->
+        <div class="page-header navbar navbar-fixed-top">
+            <!-- BEGIN HEADER INNER -->
+            <div class="page-header-inner ">
+                 <img src="assets/pages/img/logo-big-white.png" alt="logo" class="logo-default" /> </a>
+                <!-- BEGIN LOGO -->
+                
+                <div class="page-top">
+                
+                    <div class="top-menu">
+                        <ul class="nav navbar-nav pull-right">
+                            <li class="separator hide"> </li>
+                            <!-- BEGIN NOTIFICATION DROPDOWN -->
+                            <!-- DOC: Apply "dropdown-dark" class after below "dropdown-extended" to change the dropdown styte -->
+                            <!-- DOC: Apply "dropdown-hoverable" class after "dropdown" and remove data-toggle="dropdown" data-hover="dropdown" data-close-others="true" attributes to enable hover dropdown mode -->
+                            <!-- DOC: Remove "dropdown-hoverable" and add data-toggle="dropdown" data-hover="dropdown" data-close-others="true" attributes to the below A element with dropdown-toggle class -->
+                           
+                            <li class="dropdown dropdown-user dropdown-dark">
+                                <a href="javascript:;" class="dropdown-toggle" data-toggle="dropdown" data-hover="dropdown" data-close-others="true">
+                                    <span class="username username-hide-on-mobile"> <%= user.name %>, Code ( <%= user.code %>)</span>
+                                    <!-- DOC: Do not remove below empty space(&nbsp;) as its purposely used -->
+                                    <img alt="" class="img-circle" src="/assets/pages/img/avatar7.png" /> </a>
+                                <ul class="dropdown-menu dropdown-menu-default">                                
+                                    <li><a href="/dashboard"><i class="halflings-icon list-alt"></i> Bảng thông tin</a></li>
+                            <li><a href="/logout/<%= user.username %>" id="logout"><i class="halflings-icon off"></i> Đăng xuất</a></li>                
+                                </ul>
+                            </li>
+                           
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="clearfix"> </div>
+        
+        <div class="page-container">
+           
+            <div class="well">
+                    <p id="noidung"></p>
+            </div>
+            <!-- BEGIN CONTENT -->
+            <div class="page-content-wrapper">
+                 <div class="col-md-9" >    
+                    <div>
+                        <div class="portlet box blue">
+                            <div class="portlet-title">
+                                <div class="caption">
+                                    <i class="icon-social-dribbble font-red"></i>
+                                    <span class="caption-subject font-white bold uppercase">Thực hiện</span>
+                                </div>
+                            </div>
+                            <div class="portlet-body">
+                                    <div class="well">
+                                        <p id="khachhang">Số thứ tự:  </p> </div>
+                                    <div class="clearfix">
+                                        <div class="col-md-6">
+                                        <button class="btn blue btn-block btn-lg m-icon-big" id="start" >Bắt đầu
+                                            
+                                        </button></div>
+                                    <div class="col-md-6">
+                                        <a class=" btn-outline"  href="#draggable"  data-toggle="modal" style="text-decoration: none;">
+                                            <button class="btn red btn-block btn-lg m-icon-big" id="end" disabled="true">Hoàn thành
+                                            
+                                            </button>
+
+                                        </a>
+                                    </div>
+                                    </div>
+                                    
+                                    <div class="modal fade draggable-modal" id="draggable" tabindex="-1" role="basic" aria-hidden="true">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <button type="button" class="close" data-dismiss="modal" aria-hidden="true"></button>
+                                                    <p class="modal-title" style="font-size: 25px">Trường hợp kết thúc</p>
+                                                </div>
+                                                <div class="modal-body">                                                          
+                                                    <div class="form-group form-md-checkboxes">
+                                                            <div class="md-radio-list">
+                                                            <%if(reason_end){%>
+                                                                <%for(var i = 0; i < reason_end.length; i++){ %>    
+                                                                <div class="md-radio">
+                                                                        <input type="radio" id="<%= reason_end[i]._id%>" name="reason" value="<%= reason_end[i]._id%>" class="md-radiobtn">
+                                                                        <label for="<%= reason_end[i]._id%>">
+                                                                            <span></span>
+                                                                            <span class="check"></span>
+                                                                            <span class="box"></span><%= reason_end[i].content%> </label>
+                                                                </div>
+                                                                
+                                                                <%}%>
+                                                                <%}%>    
+                                                            </div>
+                                                        
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn dark btn-outline" data-dismiss="modal" id="close">Đóng</button>
+                                                    <button type="button" class="btn green" data-dismiss="modal"  id="ketthuc">Lưu</button>
+                                                </div>
+                                            </div>
+                                            <!-- /.modal-content -->
+                                        </div>
+                                        <!-- /.modal-dialog -->
+                                    </div>  
+
+                            </div>
+                        </div>
+                        <div class="portlet box blue" id="noidungviec" hidden>
+                            <div class="portlet-title">
+                                <div class="caption">
+                                    <i class="icon-puzzle font-red"></i>
+                                    <span class="caption-subject font-white bold uppercase">Nội dung công việc</span>
+                                </div>
+                                
+                            </div>
+                            <div class="portlet-body form">
+                                <form class="form-horizontal form-bordered">
+                                    <div class="form-body">
+                                            <div class="form-group">
+                                                    <label class="control-label col-md-2">Số lệnh</label>
+                                                    <div class="col-md-10">
+                                                            <input type="number" class="form-control" id="so_luong_lenh" min="1">
+                                                    </div>
+                                                </div>
+                                        <div class="form-group">
+                                            <label class="control-label col-md-2">Ghi chú</label>
+                                            <div class="col-md-10">
+                                                <textarea name="comment_user" id="comment_user" data-provide="markdown" rows="10"></textarea>
+                                            </div>
+                                        </div>
+                                        
+                                        
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="portlet box blue">
+                                <div class="portlet-title">
+                                    <div class="caption">
+                                        <i class="icon-social-dribbble font-purple"></i>
+                                        <span class="caption-subject font-white bold uppercase" >Hướng dẫn sử dụng</span>
+                                    </div>
+                                    
+                                </div>
+                                <div class="portlet-body">
+                                    <div class="well">
+                                        <p style="font-size: 40px">Cách làm việc</p> Khi có khách hàng đến làm việc. Hệ thống sẽ hiển thị khách hàng có số thứ tự nhỏ nhất ( đến sớm hơn ) trước, sau đó nhân viên ấn bắt đầu để tính thời gian làm việc. Sau khi làm việc xong nhân viên ấn kết thúc. Nếu nhân viên chờ quá lâu có thể ấn tiếp theo để chuyển sang khách hàng mới </div>
+                                    <div class="well well-large">
+                                        <p style="font-size: 40px">Cách tạm dựng làm việc</p>Khi nhân viên ấn bắt đầu thì phải kết thúc phiên làm việc mới được đăng xuất. Nếu chưa ấn bắt đầu bạn có thể đăng xuất và khách hàng sẽ tạm dừng làm việc </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="portlet box blue">
+                        <div class="portlet-title">
+                            <div class="caption">
+                                <i class="fa fa-gift"></i>Thông tin </div>
+                            <div class="tools">
+                                <a href="javascript:;" class="collapse" data-original-title="" title=""> </a>
+                            </div>
+                        </div>
+                        <div class="portlet-body">
+                            <ul>
+                                <li><p id="count">Tổng số lượt làm việc: <%= user.today_finished_count%></p></li>
+                                <br>
+                                <li><p id="luottiep">Tổng số khách hàng đợi:  </p>  </li>
+                                
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+        <div class="page-footer">
+            <div class="page-footer-inner"> 2019 &copy; CÔNG TY CP VIỄN THÔNG VNNET
+                <a target="_blank" href=">Keenthemes</a> &nbsp;|&nbsp;
+            </div>
+            <div class="scroll-to-top">
+                <i class="icon-arrow-up"></i>
+            </div>
+        </div>
+
+        <script src="assets/global/plugins/bootstrap-markdown/js/bootstrap-markdown.js" type="text/javascript"></script>
+        <script src="assets/global/plugins/jquery.min.js" type="text/javascript"></script>
+        <script src="assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
+        <script src="assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
+        <script src="assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
+        <script src="assets/global/plugins/jquery.blockui.min.js" type="text/javascript"></script>
+        <script src="assets/global/plugins/bootstrap-switch/js/bootstrap-switch.min.js" type="text/javascript"></script>
+        <script src="assets/global/scripts/app.min.js" type="text/javascript"></script>
+        <script src="assets/layouts/layout4/scripts/layout.min.js" type="text/javascript"></script>
+        <script src="assets/layouts/layout4/scripts/demo.min.js" type="text/javascript"></script>
+        <script src="assets/layouts/global/scripts/quick-sidebar.min.js" type="text/javascript"></script>
+        <script src="assets/layouts/global/scripts/quick-nav.min.js" type="text/javascript"></script>
+      
+    </body>
+
+</html>
